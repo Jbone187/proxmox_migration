@@ -1,0 +1,93 @@
+import axios from "axios";
+import https from "https";
+import inquirer from "inquirer";
+
+let truth = [];
+let results;
+let pveauthcookie;
+let CSRFPreventionToken;
+let creds = "username=#######";
+let ticket = "https://#######/api2/json/access/ticket";
+
+//Title of Application
+console.log("Welcome to Proxmox Migration Api\n");
+
+//Prompt User for Migration and clean data
+
+let migration_questions = [
+  {
+    type: "input",
+    name: "proxmox_migration",
+    message:
+      "Add the vmid separated by a space of the servers you want to migrate",
+  },
+];
+
+inquirer.prompt(migration_questions).then((answers) => {
+  let mig_servers = answers.proxmox_migration.split(" ");
+
+  let arr_conv_num = mig_servers.map(function (num) {
+    return Number(num);
+  });
+
+  //Verify data in array
+
+  function verify() {
+    arr_conv_num.forEach((booleans) => {
+      let value = Number.isNaN(booleans);
+
+      truth.push(value);
+    });
+  }
+  verify();
+
+  results = truth.includes(true);
+
+  //Promox API Calls
+
+  async function proxmox_api_call(trigger) {
+    if (trigger === false) {
+      for (let i = 0; i < arr_conv_num.length; i++) {
+        let migrate_vm = `https://#######:8006/api2/json/nodes/pve2/qemu/${arr_conv_num[i]}/migrate?target=prox&online=1&with-local-disks=1`;
+
+        const response = await axios.post(ticket, creds, {
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+          httpsAgent: new https.Agent({
+            rejectUnauthorized: false,
+          }),
+        });
+
+        //Authenication cookies and tokens
+
+        pveauthcookie = response.data.data.ticket;
+        CSRFPreventionToken = response.data.data.CSRFPreventionToken;
+
+        axios({
+          method: "post",
+          url: migrate_vm,
+
+          headers: {
+            Cookie: `PVEAuthCookie=${pveauthcookie}`,
+            CSRFPreventionToken: CSRFPreventionToken,
+          },
+
+          httpsAgent: new https.Agent({
+            rejectUnauthorized: false,
+          }),
+        })
+          .then(function (response) {
+            console.log(response.data);
+          })
+          .catch(function (error) {
+            console.log(error);
+          });
+      }
+    } else if (trigger === true) {
+      console.log("Error - All Parameters must be Numbers");
+      process.exit(1);
+    }
+  }
+  proxmox_api_call(results);
+});
